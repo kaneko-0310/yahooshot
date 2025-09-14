@@ -1,0 +1,43 @@
+name: YahooShot Daily
+
+on:
+  schedule:
+    - cron: "0 0 * * *"   # 毎日 00:00 UTC = 日本時間 09:00
+  workflow_dispatch:
+
+jobs:
+  shot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          pip install selenium webdriver-manager
+
+      - name: Install Chrome
+        uses: browser-actions/setup-chrome@v1
+
+      - name: Run script (headless)
+        env:
+          YAHOOSHOT_OUTPUT_DIR: /tmp/yahooshot
+        run: |
+          mkdir -p "$YAHOOSHOT_OUTPUT_DIR"
+          python yahoo_shot.py
+
+      - name: Install rclone
+        run: |
+          curl https://rclone.org/install.sh | sudo bash
+
+      - name: Configure rclone
+        run: |
+          mkdir -p ~/.config/rclone
+          echo "${{ secrets.RCLONE_CONF }}" > ~/.config/rclone/rclone.conf
+
+      - name: Upload to Google Drive
+        run: rclone copy /tmp/yahooshot gdrive:YahooShot -v
