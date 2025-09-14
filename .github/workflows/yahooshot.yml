@@ -39,5 +39,9 @@ jobs:
           mkdir -p ~/.config/rclone
           echo "${{ secrets.RCLONE_CONF }}" > ~/.config/rclone/rclone.conf
 
-      - name: Upload to Google Drive
-        run: rclone copy /tmp/yahooshot gdrive:YahooShot -v
+      - name: Upload to Google Drive (monthly folder)
+        run: |
+          YM=$(TZ=Asia/Tokyo date +%Y%m)        # 日本時間でYYYYMMを作成
+          rclone mkdir "gdrive:YahooShot/${YM}" # フォルダがなければ作成
+          rclone copy /tmp/yahooshot "gdrive:YahooShot/${YM}" -v
+
