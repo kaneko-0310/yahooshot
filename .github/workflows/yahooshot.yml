@@ -30,14 +30,16 @@ jobs:
         run: |
           mkdir -p /tmp/yahooshot
 
-      - name: Configure rclone (use secret as-is)
-        run: |
-          curl -fsSL https://rclone.org/install.sh | sudo bash
-          mkdir -p ~/.config/rclone
-          # Secrets に保存した rclone.conf の全文をそのまま書き出す（改行保持）
-          cat > ~/.config/rclone/rclone.conf << 'EOF'
-          ${{ secrets.RCLONE_CONF }}
-          EOF
+      - name: Configure rclone (safe write)
+      env:
+        RCLONE_CONF_CONTENT: ${{ secrets.RCLONE_CONF }}   # ← rclone.conf の全文をSecretsに保存してあること
+      run: |
+        curl -fsSL https://rclone.org/install.sh | sudo bash
+        mkdir -p ~/.config/rclone
+        # 改行を保ってファイルに書き出す
+        printf "%s" "$RCLONE_CONF_CONTENT" > ~/.config/rclone/rclone.conf
+        rclone --version
+
 
       - name: Run screenshot script (headless)
         env:
