@@ -1,82 +1,56 @@
-# .github/workflows/yahoo-shot.yml
+# .github/workflows/yahooshot.yml
 name: Yahoo Screenshot Auto
 
 on:
   schedule:
-   - cron: "0 0 * * *"     # 00:00 UTC = 09:00 JST
+    - cron: "0 0 * * *"     # 00:00 UTC = 09:00 JST
   workflow_dispatch:
 
 jobs:
   screenshot:
     runs-on: ubuntu-latest
-    
+
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
-    - name: Install dependencies
-      run: |
-        pip install selenium requests webdriver-manager
+      - name: Install dependencies
+        run: |
+          pip install selenium webdriver-manager requests
 
-    - name: Create output directory
-      run: |
-        mkdir -p /tmp/yahooshot
-        chmod 777 /tmp/yahooshot
+      - name: Install Chrome
+        uses: browser-actions/setup-chrome@v1
 
-    - name: Setup rclone with Google Drive
-      run: |
-        # rcloneインストール
-        curl https://rclone.org/install.sh | sudo bash
-        
-        # 設定ディレクトリ作成
-        mkdir -p ~/.config/rclone
-        
-        # RCLONE_CONF から rclone.conf を生成
-        cat > ~/.config/rclone/rclone.conf << 'EOF'
-        [gdrive]
-        type = drive
-        scope = drive
-        team_drive = 0ABKIBJPihH-eUk9PVA
-        root_folder_id = 
-        EOF
-        
-        # トークン情報を追加
-        echo 'token = ${{ secrets.RCLONE_CONF }}' | \
-        jq -r '.token | "token = " + tostring' >> ~/.config/rclone/rclone.conf
+      - name: Prepare output directory
+        run: |
+          mkdir -p /tmp/yahooshot
 
-    - name: Run screenshot script
-      run: |
-        export YAHOOSHOT_OUTPUT_DIR=/tmp/yahooshot
-        python yahoo_screenshot.py
+      - name: Configure rclone (use secret as-is)
+        run: |
+          curl -fsSL https://rclone.org/install.sh | sudo bash
+          mkdir -p ~/.config/rclone
+          # Secrets に保存した rclone.conf の全文をそのまま書き出す（改行保持）
+          cat > ~/.config/rclone/rclone.conf << 'EOF'
+          ${{ secrets.RCLONE_CONF }}
+          EOF
 
-    - name: Upload to Google Drive
-      run: |
-        YM=$(TZ=Asia/Tokyo date +%Y%m)
-        echo "Creating/accessing folder: YahooShot/$YM"
-        
-        # 月次フォルダ作成（既存の場合はスキップ）
-        rclone mkdir "gdrive:YahooShot/$YM" || echo "Folder exists or creation failed, continuing..."
-        
-        # ファイルアップロード
-        if [ "$(ls -A /tmp/yahooshot)" ]; then
-          echo "Uploading files..."
-          rclone copy /tmp/yahooshot "gdrive:YahooShot/$YM" --progress --transfers 1
-          echo "Upload completed"
-          
-          # アップロード結果確認
-          rclone lsl "gdrive:YahooShot/$YM"
-        else
-          echo "No files to upload"
-        fi
+      - name: Run screenshot script (headless)
+        env:
+          YAHOOSHOT_OUTPUT_DIR: /tmp/yahooshot
+        run: |
+          python yahoo_shot.py
 
-    - name: Cleanup
-      if: always()
-      run: |
-        rm -rf /tmp/yahooshot
-        rm -rf ~/.config/rclone
+      - name: Upload to Google Drive (monthly folder)
+        run: |
+          YM=$(TZ=Asia/Tokyo date +%Y%m)         # 日本時間のYYYYMM
+          rclone mkdir "gdrive:YahooShot/${YM}"  # 既存ならそのままスキップ
+          rclone copy /tmp/yahooshot "gdrive:YahooShot/${YM}" -v
 
+      - name: Cleanup
+        if: always()
+        run: rm -rf /tmp/yahooshot
