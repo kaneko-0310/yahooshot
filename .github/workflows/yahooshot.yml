@@ -1,9 +1,8 @@
-# .github/workflows/yahooshot.yml
 name: Yahoo Screenshot Auto
 
 on:
   schedule:
-    - cron: "0 0 * * *"     # 00:00 UTC = 09:00 JST
+    - cron: "0 0 * * *"     # 00:00 UTC = 日本時間 09:00 に毎日実行
   workflow_dispatch:
 
 jobs:
@@ -11,48 +10,56 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 1) リポジトリの取得
       - name: Checkout
         uses: actions/checkout@v4
 
+      # 2) Python の準備
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
+      # 3) 依存ライブラリをインストール
       - name: Install dependencies
         run: |
           pip install selenium webdriver-manager requests
 
+      # 4) Chrome を入れる（headlessで使う）
       - name: Install Chrome
         uses: browser-actions/setup-chrome@v1
 
+      # 5) 出力先（中間フォルダ）を用意
       - name: Prepare output directory
         run: |
           mkdir -p /tmp/yahooshot
 
+      # 6) rclone をセットアップ（改行を保持して安全に書き出し）
       - name: Configure rclone (safe write)
-      env:
-        RCLONE_CONF_CONTENT: ${{ secrets.RCLONE_CONF }}   # ← rclone.conf の全文をSecretsに保存してあること
-      run: |
-        curl -fsSL https://rclone.org/install.sh | sudo bash
-        mkdir -p ~/.config/rclone
-        # 改行を保ってファイルに書き出す
-        printf "%s" "$RCLONE_CONF_CONTENT" > ~/.config/rclone/rclone.conf
-        rclone --version
+        env:
+          RCLONE_CONF_CONTENT: ${{ secrets.RCLONE_CONF }}   # ← rclone.conf の全文を Secrets に保存しておく
+        run: |
+          curl -fsSL https://rclone.org/install.sh | sudo bash
+          mkdir -p ~/.config/rclone
+          printf "%s" "$RCLONE_CONF_CONTENT" > ~/.config/rclone/rclone.conf
+          rclone --version
 
-
+      # 7) スクリーンショット実行（headless / iPhone16相当で撮影）
       - name: Run screenshot script (headless)
         env:
           YAHOOSHOT_OUTPUT_DIR: /tmp/yahooshot
         run: |
           python yahoo_shot.py
 
+      # 8) Google Drive の月別フォルダ（YYYYMM）へアップロード
       - name: Upload to Google Drive (monthly folder)
         run: |
-          YM=$(TZ=Asia/Tokyo date +%Y%m)         # 日本時間のYYYYMM
-          rclone mkdir "gdrive:YahooShot/${YM}"  # 既存ならそのままスキップ
+          YM=$(TZ=Asia/Tokyo date +%Y%m)           # 日本時間で YYYYMM
+          rclone mkdir "gdrive:YahooShot/${YM}"    # 既にあればOK
           rclone copy /tmp/yahooshot "gdrive:YahooShot/${YM}" -v
 
+      # 9) 後片付け
       - name: Cleanup
         if: always()
-        run: rm -rf /tmp/yahooshot
+        run: |
+          rm -rf /tmp/yahooshot
