@@ -94,6 +94,7 @@ def make_driver():
     }
     opts.add_experimental_option("mobileEmulation", mobile_emulation)
     opts.add_argument("--lang=ja-JP")
+    opts.add_argument("--accept-language=ja-JP,ja;q=0.9")
     if USE_INCOGNITO:
         opts.add_argument("--incognito")
     opts.add_argument("--disable-blink-features=AutomationControlled")
@@ -117,6 +118,34 @@ def make_driver():
         service=Service(ChromeDriverManager().install()),
         options=opts
     )
+
+    # ▼ 無料で“日本寄り”に寄せる：TZ/Locale/Geo/Accept-Language をCDPで固定
+    try:
+        driver.execute_cdp_cmd("Emulation.setTimezoneOverride", {"timezoneId": "Asia/Tokyo"})
+    except Exception:
+        pass
+    try:
+        driver.execute_cdp_cmd("Emulation.setLocaleOverride", {"locale": "ja-JP"})
+    except Exception:
+        pass
+    try:
+        driver.execute_cdp_cmd("Emulation.setGeolocationOverride",
+                               {"latitude": 35.6804, "longitude": 139.7690, "accuracy": 100})
+        driver.execute_cdp_cmd("Browser.grantPermissions", {
+            "origin": "https://m.yahoo.co.jp",
+            "permissions": ["geolocation"]
+        })
+    except Exception:
+        pass
+    try:
+        driver.execute_cdp_cmd("Network.enable", {})
+        driver.execute_cdp_cmd("Network.setExtraHTTPHeaders", {
+            "headers": {"Accept-Language": "ja-JP,ja;q=0.9"}
+        })
+    except Exception:
+        pass
+
+    # webdriver検出緩和（任意）
     try:
         driver.execute_cdp_cmd(
             "Page.addScriptToEvaluateOnNewDocument",
@@ -124,6 +153,7 @@ def make_driver():
         )
     except Exception:
         pass
+
     return driver
 
 
